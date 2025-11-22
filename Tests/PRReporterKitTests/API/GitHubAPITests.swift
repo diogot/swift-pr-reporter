@@ -138,5 +138,5 @@ struct GitHubAPITests {
             let _: [String: String] = try await api.get("/nonexistent")
         }
     }
-    #endif
 }
+#endif
