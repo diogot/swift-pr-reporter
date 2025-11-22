@@ -7,15 +7,13 @@ import Foundation
 
 // Note: These tests use MockURLProtocol which doesn't work reliably on Linux
 // due to FoundationNetworking limitations. The tests are conditionally disabled on Linux.
-@Suite("GitHubAPI Tests")
+// Tests are run serially because they share static state in MockURLProtocol.
+#if !os(Linux)
+@Suite("GitHubAPI Tests", .serialized)
 struct GitHubAPITests {
-    init() {
-        MockURLProtocol.reset()
-    }
-
-    #if !os(Linux)
     @Test("GET request includes authorization header")
     func getIncludesAuth() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.setupSuccessResponse(json: ["result": "ok"])
 
         let session = MockURLProtocol.createMockSession()
@@ -33,6 +31,7 @@ struct GitHubAPITests {
 
     @Test("GET request includes correct headers")
     func getIncludesHeaders() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.setupSuccessResponse(json: ["result": "ok"])
 
         let session = MockURLProtocol.createMockSession()
@@ -47,6 +46,7 @@ struct GitHubAPITests {
 
     @Test("GET request with query parameters")
     func getWithQueryParams() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.setupSuccessResponse(json: ["result": "ok"])
 
         let session = MockURLProtocol.createMockSession()
@@ -62,6 +62,7 @@ struct GitHubAPITests {
 
     @Test("POST request sends JSON body")
     func postSendsBody() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.setupSuccessResponse(json: ["id": 123])
 
         let session = MockURLProtocol.createMockSession()
@@ -87,6 +88,7 @@ struct GitHubAPITests {
 
     @Test("PATCH request uses correct method")
     func patchMethod() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.setupSuccessResponse(json: ["updated": true])
 
         let session = MockURLProtocol.createMockSession()
@@ -104,6 +106,7 @@ struct GitHubAPITests {
 
     @Test("DELETE request uses correct method")
     func deleteMethod() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(
                 url: request.url!,
@@ -125,6 +128,7 @@ struct GitHubAPITests {
 
     @Test("API error is thrown for 4xx responses")
     func apiErrorFor4xx() async throws {
+        MockURLProtocol.reset()
         MockURLProtocol.setupErrorResponse(statusCode: 404, message: "Not Found")
 
         let session = MockURLProtocol.createMockSession()
