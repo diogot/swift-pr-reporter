@@ -19,7 +19,8 @@ struct GitHubAPITests {
         let session = MockURLProtocol.createMockSession()
         let api = GitHubAPI(
             token: "test-token-123",
-            urlSession: session
+            urlSession: session,
+            retryPolicy: .none
         )
 
         let _: [String: String] = try await api.get("/test")
@@ -34,7 +35,7 @@ struct GitHubAPITests {
         MockURLProtocol.setupSuccessResponse(json: ["result": "ok"])
 
         let session = MockURLProtocol.createMockSession()
-        let api = GitHubAPI(token: "token", urlSession: session)
+        let api = GitHubAPI(token: "token", urlSession: session, retryPolicy: .none)
 
         let _: [String: String] = try await api.get("/test")
 
@@ -49,7 +50,7 @@ struct GitHubAPITests {
         MockURLProtocol.setupSuccessResponse(json: ["result": "ok"])
 
         let session = MockURLProtocol.createMockSession()
-        let api = GitHubAPI(token: "token", urlSession: session)
+        let api = GitHubAPI(token: "token", urlSession: session, retryPolicy: .none)
 
         let _: [String: String] = try await api.get("/test", query: ["page": "2", "per_page": "100"])
 
@@ -65,7 +66,7 @@ struct GitHubAPITests {
         MockURLProtocol.setupSuccessResponse(json: ["id": 123])
 
         let session = MockURLProtocol.createMockSession()
-        let api = GitHubAPI(token: "token", urlSession: session)
+        let api = GitHubAPI(token: "token", urlSession: session, retryPolicy: .none)
 
         struct TestBody: Encodable {
             let name: String
@@ -91,7 +92,7 @@ struct GitHubAPITests {
         MockURLProtocol.setupSuccessResponse(json: ["updated": true])
 
         let session = MockURLProtocol.createMockSession()
-        let api = GitHubAPI(token: "token", urlSession: session)
+        let api = GitHubAPI(token: "token", urlSession: session, retryPolicy: .none)
 
         struct UpdateBody: Encodable {
             let status: String
@@ -117,7 +118,7 @@ struct GitHubAPITests {
         }
 
         let session = MockURLProtocol.createMockSession()
-        let api = GitHubAPI(token: "token", urlSession: session)
+        let api = GitHubAPI(token: "token", urlSession: session, retryPolicy: .none)
 
         try await api.delete("/test/1")
 
@@ -131,7 +132,7 @@ struct GitHubAPITests {
         MockURLProtocol.setupErrorResponse(statusCode: 404, message: "Not Found")
 
         let session = MockURLProtocol.createMockSession()
-        let api = GitHubAPI(token: "token", urlSession: session)
+        let api = GitHubAPI(token: "token", urlSession: session, retryPolicy: .none)
 
         await #expect(throws: GitHubAPIError.self) {
             let _: [String: String] = try await api.get("/nonexistent")

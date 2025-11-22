@@ -53,6 +53,12 @@ public struct RetryPolicy: Sendable {
         initialBackoff: .seconds(2)
     )
 
+    /// No retry policy - fails immediately on first error. Useful for testing.
+    public static let none = RetryPolicy(
+        maxAttempts: 1,
+        initialBackoff: .milliseconds(1)
+    )
+
     /// Calculate backoff duration for a given attempt number.
     /// - Parameter attempt: The attempt number (0-based).
     /// - Returns: The duration to wait before the next attempt.
