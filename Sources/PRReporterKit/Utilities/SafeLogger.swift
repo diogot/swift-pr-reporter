@@ -66,7 +66,11 @@ public struct SafeLogger: Sendable {
         guard level <= .debug else { return }
 
         let status = response.statusCode
-        let ms = Int(duration.components.seconds * 1000 + Double(duration.components.attoseconds) / 1_000_000_000_000_000)
+        let seconds = duration.components.seconds
+        let attoseconds = duration.components.attoseconds
+        let msFromSeconds = Int(seconds * 1000)
+        let msFromAttoseconds = Int(Double(attoseconds) / 1_000_000_000_000_000)
+        let ms = msFromSeconds + msFromAttoseconds
 
         // Extract rate limit info if available
         var rateLimitInfo = ""

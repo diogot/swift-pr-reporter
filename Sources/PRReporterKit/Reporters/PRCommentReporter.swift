@@ -13,7 +13,7 @@ public final class PRCommentReporter: Reporter, Sendable {
 
     /// The current comment ID (if found/created).
     private let commentIDLock = NSLock()
-    private var _commentID: Int?
+    nonisolated(unsafe) private var _commentID: Int?
     private var commentID: Int? {
         get { commentIDLock.withLock { _commentID } }
         set { commentIDLock.withLock { _commentID = newValue } }

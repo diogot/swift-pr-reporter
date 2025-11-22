@@ -29,7 +29,7 @@ public final class CheckRunReporter: Reporter, Sendable {
 
     /// The check run ID (set after creation).
     private let checkRunIDLock = NSLock()
-    private var _checkRunID: Int?
+    nonisolated(unsafe) private var _checkRunID: Int?
     private var checkRunID: Int? {
         get { checkRunIDLock.withLock { _checkRunID } }
         set { checkRunIDLock.withLock { _checkRunID = newValue } }
@@ -37,7 +37,7 @@ public final class CheckRunReporter: Reporter, Sendable {
 
     /// Stored summary for final completion.
     private let summaryLock = NSLock()
-    private var _storedSummary: String?
+    nonisolated(unsafe) private var _storedSummary: String?
     private var storedSummary: String? {
         get { summaryLock.withLock { _storedSummary } }
         set { summaryLock.withLock { _storedSummary = newValue } }
