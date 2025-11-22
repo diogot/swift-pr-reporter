@@ -4,17 +4,48 @@ import FoundationNetworking
 import Foundation
 
 /// A mock URL protocol for testing network requests without making real HTTP calls.
+/// Thread-safe implementation for use with async/await tests.
 final class MockURLProtocol: URLProtocol {
+    /// Lock for thread-safe access to shared state.
+    private static let lock = NSLock()
+
+    /// Internal storage for request handler.
+    nonisolated(unsafe) private static var _requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    /// Internal storage for recorded requests.
+    nonisolated(unsafe) private static var _recordedRequests: [URLRequest] = []
+
     /// Handler for incoming requests. Set this before making requests.
-    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+    /// Thread-safe accessor.
+    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))? {
+        get { lock.withLock { _requestHandler } }
+        set { lock.withLock { _requestHandler = newValue } }
+    }
 
     /// Recorded requests for verification.
-    nonisolated(unsafe) static var recordedRequests: [URLRequest] = []
+    /// Thread-safe accessor that returns a copy of the array.
+    static var recordedRequests: [URLRequest] {
+        lock.withLock { Array(_recordedRequests) }
+    }
 
-    /// Reset the mock state.
+    /// Reset the mock state. Thread-safe.
     static func reset() {
-        requestHandler = nil
-        recordedRequests = []
+        lock.withLock {
+            _requestHandler = nil
+            _recordedRequests = []
+        }
+    }
+
+    /// Append a request to the recorded list. Thread-safe.
+    private static func appendRequest(_ request: URLRequest) {
+        lock.withLock {
+            _recordedRequests.append(request)
+        }
+    }
+
+    /// Get the handler. Thread-safe.
+    private static func getHandler() -> ((URLRequest) throws -> (HTTPURLResponse, Data))? {
+        lock.withLock { _requestHandler }
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -26,9 +57,9 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        MockURLProtocol.recordedRequests.append(request)
+        Self.appendRequest(request)
 
-        guard let handler = MockURLProtocol.requestHandler else {
+        guard let handler = Self.getHandler() else {
             fatalError("MockURLProtocol.requestHandler not set")
         }
 
