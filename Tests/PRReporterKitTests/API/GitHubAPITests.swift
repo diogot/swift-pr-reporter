@@ -24,8 +24,7 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test")
 
-        #expect(MockURLProtocol.recordedRequests.count == 1)
-        let request = MockURLProtocol.recordedRequests[0]
+        let request = try #require(MockURLProtocol.recordedRequests.first)
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token-123")
     }
 
@@ -39,8 +38,7 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test")
 
-        #expect(MockURLProtocol.recordedRequests.count == 1)
-        let request = MockURLProtocol.recordedRequests[0]
+        let request = try #require(MockURLProtocol.recordedRequests.first)
         #expect(request.value(forHTTPHeaderField: "Accept") == "application/vnd.github+json")
         #expect(request.value(forHTTPHeaderField: "X-GitHub-Api-Version") == "2022-11-28")
     }
@@ -55,9 +53,8 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test", query: ["page": "2", "per_page": "100"])
 
-        #expect(MockURLProtocol.recordedRequests.count == 1)
-        let request = MockURLProtocol.recordedRequests[0]
-        let url = request.url!.absoluteString
+        let request = try #require(MockURLProtocol.recordedRequests.first)
+        let url = try #require(request.url).absoluteString
         #expect(url.contains("page=2"))
         #expect(url.contains("per_page=100"))
     }
@@ -78,15 +75,14 @@ struct GitHubAPITests {
         let body = TestBody(name: "test", value: 42)
         let _: [String: Int] = try await api.post("/test", body: body)
 
-        #expect(MockURLProtocol.recordedRequests.count == 1)
-        let request = MockURLProtocol.recordedRequests[0]
+        let request = try #require(MockURLProtocol.recordedRequests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
 
-        let sentBody = request.httpBody!
-        let json = try JSONSerialization.jsonObject(with: sentBody) as! [String: Any]
-        #expect(json["name"] as? String == "test")
-        #expect(json["value"] as? Int == 42)
+        let sentBody = try #require(request.httpBody)
+        let json = try JSONSerialization.jsonObject(with: sentBody) as? [String: Any]
+        #expect(json?["name"] as? String == "test")
+        #expect(json?["value"] as? Int == 42)
     }
 
     @Test("PATCH request uses correct method")
@@ -103,8 +99,7 @@ struct GitHubAPITests {
 
         let _: [String: Bool] = try await api.patch("/test/1", body: UpdateBody(status: "completed"))
 
-        #expect(MockURLProtocol.recordedRequests.count == 1)
-        let request = MockURLProtocol.recordedRequests[0]
+        let request = try #require(MockURLProtocol.recordedRequests.first)
         #expect(request.httpMethod == "PATCH")
     }
 
@@ -126,8 +121,7 @@ struct GitHubAPITests {
 
         try await api.delete("/test/1")
 
-        #expect(MockURLProtocol.recordedRequests.count == 1)
-        let request = MockURLProtocol.recordedRequests[0]
+        let request = try #require(MockURLProtocol.recordedRequests.first)
         #expect(request.httpMethod == "DELETE")
     }
 
