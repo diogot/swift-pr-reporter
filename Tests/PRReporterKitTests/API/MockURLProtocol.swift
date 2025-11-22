@@ -9,11 +9,19 @@ final class MockURLProtocol: URLProtocol {
     /// Lock for thread-safe access to shared state.
     private static let lock = NSLock()
 
+    /// Flag to indicate if mocking is enabled (only intercept when enabled).
+    nonisolated(unsafe) private static var _isMockingEnabled = false
+
     /// Internal storage for request handler.
     nonisolated(unsafe) private static var _requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
     /// Internal storage for recorded requests.
     nonisolated(unsafe) private static var _recordedRequests: [URLRequest] = []
+
+    /// Check if mocking is currently enabled.
+    static var isMockingEnabled: Bool {
+        lock.withLock { _isMockingEnabled }
+    }
 
     /// Handler for incoming requests. Set this before making requests.
     /// Thread-safe accessor.
@@ -28,7 +36,27 @@ final class MockURLProtocol: URLProtocol {
         lock.withLock { Array(_recordedRequests) }
     }
 
-    /// Reset the mock state. Thread-safe.
+    /// Start mocking - registers the protocol globally.
+    static func startMocking() {
+        lock.withLock {
+            _isMockingEnabled = true
+            _requestHandler = nil
+            _recordedRequests = []
+        }
+        _ = URLProtocol.registerClass(MockURLProtocol.self)
+    }
+
+    /// Stop mocking - unregisters the protocol.
+    static func stopMocking() {
+        URLProtocol.unregisterClass(MockURLProtocol.self)
+        lock.withLock {
+            _isMockingEnabled = false
+            _requestHandler = nil
+            _recordedRequests = []
+        }
+    }
+
+    /// Reset the mock state (for use between tests). Thread-safe.
     static func reset() {
         lock.withLock {
             _requestHandler = nil
@@ -49,7 +77,8 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
-        true
+        // Only intercept if mocking is enabled
+        return isMockingEnabled
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -60,7 +89,8 @@ final class MockURLProtocol: URLProtocol {
         Self.appendRequest(request)
 
         guard let handler = Self.getHandler() else {
-            fatalError("MockURLProtocol.requestHandler not set")
+            client?.urlProtocol(self, didFailWithError: NSError(domain: "MockURLProtocol", code: 1, userInfo: [NSLocalizedDescriptionKey: "requestHandler not set"]))
+            return
         }
 
         do {
@@ -80,6 +110,7 @@ final class MockURLProtocol: URLProtocol {
 
 extension MockURLProtocol {
     /// Create a URLSession configured to use MockURLProtocol.
+    /// Note: Also requires startMocking() to be called for the protocol to intercept requests.
     static func createMockSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]

@@ -11,6 +11,11 @@ import Foundation
 #if !os(Linux)
 @Suite("GitHubAPI Tests", .serialized)
 struct GitHubAPITests {
+    init() {
+        // Start mocking at suite initialization
+        MockURLProtocol.startMocking()
+    }
+
     @Test("GET request includes authorization header")
     func getIncludesAuth() async throws {
         MockURLProtocol.reset()
