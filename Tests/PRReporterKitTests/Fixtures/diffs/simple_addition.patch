@@ -1,0 +1,11 @@
+@@ -1,5 +1,7 @@
+ import Foundation
+
++// New comment added
++
+ class MyClass {
+-    func hello() {}
++    func hello() {
++        print("Hello")
++    }
+ }
