@@ -39,6 +39,7 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test")
 
+        #expect(MockURLProtocol.recordedRequests.count == 1)
         let request = MockURLProtocol.recordedRequests[0]
         #expect(request.value(forHTTPHeaderField: "Accept") == "application/vnd.github+json")
         #expect(request.value(forHTTPHeaderField: "X-GitHub-Api-Version") == "2022-11-28")
@@ -54,6 +55,7 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test", query: ["page": "2", "per_page": "100"])
 
+        #expect(MockURLProtocol.recordedRequests.count == 1)
         let request = MockURLProtocol.recordedRequests[0]
         let url = request.url!.absoluteString
         #expect(url.contains("page=2"))
@@ -76,6 +78,7 @@ struct GitHubAPITests {
         let body = TestBody(name: "test", value: 42)
         let _: [String: Int] = try await api.post("/test", body: body)
 
+        #expect(MockURLProtocol.recordedRequests.count == 1)
         let request = MockURLProtocol.recordedRequests[0]
         #expect(request.httpMethod == "POST")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
@@ -100,6 +103,7 @@ struct GitHubAPITests {
 
         let _: [String: Bool] = try await api.patch("/test/1", body: UpdateBody(status: "completed"))
 
+        #expect(MockURLProtocol.recordedRequests.count == 1)
         let request = MockURLProtocol.recordedRequests[0]
         #expect(request.httpMethod == "PATCH")
     }
@@ -122,6 +126,7 @@ struct GitHubAPITests {
 
         try await api.delete("/test/1")
 
+        #expect(MockURLProtocol.recordedRequests.count == 1)
         let request = MockURLProtocol.recordedRequests[0]
         #expect(request.httpMethod == "DELETE")
     }
