@@ -276,6 +276,34 @@ swift test
 swift build -c release
 ```
 
+## Creating a Release
+
+Releases are automated via GitHub Actions. When a version tag is pushed, the workflow will:
+
+1. Run tests on both macOS and Linux
+2. Create a GitHub Release with installation instructions
+
+### Steps to Release
+
+```bash
+# Ensure you're on main with latest changes
+git checkout main
+git pull origin main
+
+# Create and push a version tag
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow will automatically create a GitHub Release once all tests pass.
+
+### Version Format
+
+Use semantic versioning with a `v` prefix:
+- `v1.0.0` - Major release
+- `v1.1.0` - Minor release (new features)
+- `v1.0.1` - Patch release (bug fixes)
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
