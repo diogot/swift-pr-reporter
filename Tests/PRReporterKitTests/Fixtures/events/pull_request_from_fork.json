@@ -1,0 +1,28 @@
+{
+  "action": "opened",
+  "number": 456,
+  "pull_request": {
+    "number": 456,
+    "title": "Fork PR",
+    "state": "open",
+    "head": {
+      "sha": "fork123",
+      "ref": "fork-feature",
+      "repo": {
+        "full_name": "contributor/repo",
+        "fork": true
+      }
+    },
+    "base": {
+      "sha": "main123",
+      "ref": "main",
+      "repo": {
+        "full_name": "owner/repo",
+        "fork": false
+      }
+    }
+  },
+  "repository": {
+    "full_name": "owner/repo"
+  }
+}

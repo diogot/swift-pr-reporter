@@ -1,0 +1,16 @@
+@@ -1,4 +1,5 @@
+ import Foundation
++import UIKit
+
+ class MyClass {
+     var name: String
+@@ -10,6 +11,9 @@ class MyClass {
+         self.name = name
+     }
+
++    func greet() {
++        print("Hello, \(name)")
++    }
+ }
+
+ // End of file

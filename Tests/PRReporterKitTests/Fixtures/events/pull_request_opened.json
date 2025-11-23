@@ -1,0 +1,28 @@
+{
+  "action": "opened",
+  "number": 123,
+  "pull_request": {
+    "number": 123,
+    "title": "Test PR",
+    "state": "open",
+    "head": {
+      "sha": "abc123def456",
+      "ref": "feature-branch",
+      "repo": {
+        "full_name": "owner/repo",
+        "fork": false
+      }
+    },
+    "base": {
+      "sha": "main123",
+      "ref": "main",
+      "repo": {
+        "full_name": "owner/repo",
+        "fork": false
+      }
+    }
+  },
+  "repository": {
+    "full_name": "owner/repo"
+  }
+}

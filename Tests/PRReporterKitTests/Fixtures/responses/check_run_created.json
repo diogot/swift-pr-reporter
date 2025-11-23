@@ -1,0 +1,14 @@
+{
+  "id": 12345,
+  "name": "Test Check",
+  "head_sha": "abc123",
+  "external_id": "test-check-1-1",
+  "status": "in_progress",
+  "conclusion": null,
+  "html_url": "https://github.com/owner/repo/runs/12345",
+  "output": {
+    "title": "Test Check",
+    "summary": "Running...",
+    "annotations_count": 0
+  }
+}
