@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test-macos:
+    name: Test on macOS
+    runs-on: macos-26
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build release
+        run: swift build -c release
+
+  test-linux:
+    name: Test on Linux
+    runs-on: ubuntu-latest
+    container:
+      image: swift:6.2
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build release
+        run: swift build -c release
+
+  create-release:
+    name: Create GitHub Release
+    needs: [test-macos, test-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ## Installation
+
+          ### Swift Package Manager
+
+          Add PRReporterKit to your `Package.swift`:
+
+          ```swift
+          dependencies: [
+              .package(url: "https://github.com/${{ github.repository }}.git", from: "${{ steps.get_version.outputs.VERSION }}")
+          ]
+          ```
+
+          Then add it to your target dependencies:
+
+          ```swift
+          .target(
+              name: "YourTarget",
+              dependencies: [
+                  .product(name: "PRReporterKit", package: "swift-pr-reporter")
+              ]
+          )
+          ```
+
+          ### Xcode
+
+          1. Go to **File > Add Package Dependencies...**
+          2. Enter the repository URL: `https://github.com/${{ github.repository }}.git`
+          3. Select the version: `${{ steps.get_version.outputs.VERSION }}`
+          4. Add `PRReporterKit` to your target
+
+          ## Usage
+
+          ```swift
+          import PRReporterKit
+
+          // Auto-detect context from GitHub Actions environment
+          let context = try GitHubContext.fromEnvironment()
+
+          // Create a check run reporter
+          let reporter = CheckRunReporter(
+              context: context,
+              name: "Xcode Build",
+              identifier: "xcode-build"
+          )
+
+          // Report annotations
+          let result = try await reporter.report([
+              Annotation(
+                  path: "Sources/MyApp/File.swift",
+                  line: 42,
+                  level: .warning,
+                  message: "Variable 'foo' was never used"
+              )
+          ])
+          ```
+
+          ## Requirements
+
+          - Swift 6.2+
+          - macOS 13+ or Linux (Ubuntu 22.04+)
+
+          ## Permissions Required
+
+          For GitHub Actions workflows using this library:
+
+          ```yaml
+          permissions:
+            checks: write        # For CheckRunReporter
+            pull-requests: write # For PRReviewReporter, PRCommentReporter
+          ```
+
+          For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
