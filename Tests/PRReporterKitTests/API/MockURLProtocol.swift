@@ -64,18 +64,6 @@ final class MockURLProtocol: URLProtocol {
         }
     }
 
-    /// Append a request to the recorded list. Thread-safe.
-    private static func appendRequest(_ request: URLRequest) {
-        lock.withLock {
-            _recordedRequests.append(request)
-        }
-    }
-
-    /// Get the handler. Thread-safe.
-    private static func getHandler() -> ((URLRequest) throws -> (HTTPURLResponse, Data))? {
-        lock.withLock { _requestHandler }
-    }
-
     override class func canInit(with request: URLRequest) -> Bool {
         // Only intercept if mocking is enabled
         return isMockingEnabled
@@ -86,7 +74,8 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        Self.appendRequest(request)
+        let resolvedRequest = Self.resolveRequestBody(request)
+        Self.appendRequest(resolvedRequest)
 
         guard let handler = Self.getHandler() else {
             client?.urlProtocol(self, didFailWithError: NSError(domain: "MockURLProtocol", code: 1, userInfo: [NSLocalizedDescriptionKey: "requestHandler not set"]))
@@ -94,7 +83,7 @@ final class MockURLProtocol: URLProtocol {
         }
 
         do {
-            let (response, data) = try handler(request)
+            let (response, data) = try handler(resolvedRequest)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
@@ -104,6 +93,57 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+
+    /// Append a request to the recorded list. Thread-safe.
+    private static func appendRequest(_ request: URLRequest) {
+        lock.withLock {
+            _recordedRequests.append(request)
+        }
+    }
+
+    /// Ensure httpBody is available even when the request was constructed with a body stream.
+    private static func resolveRequestBody(_ request: URLRequest) -> URLRequest {
+        guard request.httpBody == nil, let stream = request.httpBodyStream else {
+            return request
+        }
+
+        guard let bodyData = readStream(stream) else {
+            return request
+        }
+
+        var copy = request
+        copy.httpBodyStream = nil
+        copy.httpBody = bodyData
+        return copy
+    }
+
+    /// Read the full contents of an InputStream into Data.
+    private static func readStream(_ stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            if read < 0 {
+                return nil
+            }
+            if read == 0 {
+                break
+            }
+
+            data.append(buffer, count: read)
+        }
+
+        return data
+    }
+
+    /// Get the handler. Thread-safe.
+    private static func getHandler() -> ((URLRequest) throws -> (HTTPURLResponse, Data))? {
+        lock.withLock { _requestHandler }
+    }
 }
 
 // MARK: - Test Helpers
