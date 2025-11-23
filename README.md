@@ -66,7 +66,7 @@ let result = try await reporter.report([
 // Post a summary
 try await reporter.postSummary("""
 ## Build Results
-- \(result.posted) warnings posted
+- \(result.annotationsPosted) warnings posted
 """)
 ```
 
@@ -123,12 +123,13 @@ try await reporter.postSummary("""
 
 ### PRReviewReporter
 
-Posts inline review comments on specific lines in the diff.
+Posts inline review comments on specific lines in the diff. Annotations outside the diff can be handled via configurable strategies.
 
 ```swift
 let reporter = PRReviewReporter(
     context: context,
-    identifier: "code-review"
+    identifier: "code-review",
+    outOfRangeStrategy: .fallbackToComment  // Default: post out-of-diff annotations as PR comment
 )
 
 try await reporter.report(annotations)
@@ -215,9 +216,11 @@ Annotation(
 
 ```swift
 struct ReportResult {
-    let posted: Int   // New annotations posted
-    let updated: Int  // Existing annotations updated
-    let deleted: Int  // Stale annotations removed
+    let annotationsPosted: Int   // New annotations posted
+    let annotationsUpdated: Int  // Existing annotations updated
+    let annotationsDeleted: Int  // Stale annotations removed
+    let checkRunURL: URL?        // URL to check run (if applicable)
+    let commentURL: URL?         // URL to comment (if applicable)
 }
 ```
 
@@ -228,6 +231,18 @@ enum CommentMode {
     case update   // Update existing comment
     case append   // Append to existing comment
     case replace  // Delete old and create new
+}
+```
+
+### OutOfRangeStrategy
+
+For `PRReviewReporter`, controls how annotations outside the diff are handled:
+
+```swift
+enum OutOfRangeStrategy {
+    case dismiss            // Silently ignore
+    case fallbackToComment  // Post as PR comment (default)
+    case fallbackToCheckRun // Post via CheckRunReporter
 }
 ```
 
