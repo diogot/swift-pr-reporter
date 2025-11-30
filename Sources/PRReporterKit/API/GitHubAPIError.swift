@@ -4,7 +4,7 @@ import FoundationNetworking
 import Foundation
 
 /// Errors that can occur when communicating with the GitHub API.
-public struct GitHubAPIError: Error, Sendable, CustomStringConvertible {
+public struct GitHubAPIError: Error, Sendable, CustomStringConvertible, LocalizedError {
     /// HTTP status code from the response.
     public let statusCode: Int
 
@@ -31,6 +31,8 @@ public struct GitHubAPIError: Error, Sendable, CustomStringConvertible {
         desc += " - Endpoint: \(endpoint)"
         return desc
     }
+
+    public var errorDescription: String? { description }
 
     /// Creates a new API error.
     public init(

@@ -195,42 +195,120 @@ public final class PRCommentReporter: Reporter, Sendable {
     // MARK: - Private Helpers
 
     private func generateCommentBody(annotations: [Annotation]) -> String {
-        let failures = annotations.filter { $0.level == .failure }
-        let warnings = annotations.filter { $0.level == .warning }
-        let notices = annotations.filter { $0.level == .notice }
+        // Deduplicate annotations on the same file:line with same message
+        let deduplicated = deduplicateAnnotations(annotations)
+
+        let failures = deduplicated.filter { $0.annotation.level == .failure }
+        let warnings = deduplicated.filter { $0.annotation.level == .warning }
+        let notices = deduplicated.filter { $0.annotation.level == .notice }
 
         var body = ""
 
         // Summary header
         if !failures.isEmpty {
-            body += "## Errors (\(failures.count))\n\n"
-            for annotation in failures {
-                body += formatAnnotation(annotation)
-            }
-            body += "\n"
+            let totalCount = failures.reduce(0) { $0 + $1.count }
+            body += "## :x: Errors (\(totalCount))\n\n"
+            body += formatAnnotationsGroupedByFile(failures)
         }
 
         if !warnings.isEmpty {
-            body += "## Warnings (\(warnings.count))\n\n"
-            for annotation in warnings {
-                body += formatAnnotation(annotation)
-            }
-            body += "\n"
+            let totalCount = warnings.reduce(0) { $0 + $1.count }
+            body += "## :warning: Warnings (\(totalCount))\n\n"
+            body += formatAnnotationsGroupedByFile(warnings)
         }
 
         if !notices.isEmpty {
-            body += "## Notices (\(notices.count))\n\n"
-            for annotation in notices {
-                body += formatAnnotation(annotation)
+            let totalCount = notices.reduce(0) { $0 + $1.count }
+            body += "## :information_source: Notices (\(totalCount))\n\n"
+            body += formatAnnotationsGroupedByFile(notices)
+        }
+
+        if annotations.isEmpty {
+            body = ":white_check_mark: No issues found.\n"
+        }
+
+        // Add workflow run link
+        if let runID = context.runID {
+            let runURL = "https://github.com/\(context.owner)/\(context.repo)/actions/runs/\(runID)"
+            body += "\n---\n[View full logs →](\(runURL))\n"
+        }
+
+        return body
+    }
+
+    private struct DeduplicatedAnnotation {
+        let annotation: Annotation
+        let count: Int
+    }
+
+    private func deduplicateAnnotations(_ annotations: [Annotation]) -> [DeduplicatedAnnotation] {
+        var seen: [String: (annotation: Annotation, count: Int)] = [:]
+
+        for annotation in annotations {
+            let key = "\(annotation.path):\(annotation.line):\(annotation.message)"
+            if let existing = seen[key] {
+                seen[key] = (existing.annotation, existing.count + 1)
+            } else {
+                seen[key] = (annotation, 1)
+            }
+        }
+
+        // Sort by file path, then line number
+        return seen.values
+            .map { DeduplicatedAnnotation(annotation: $0.annotation, count: $0.count) }
+            .sorted { lhs, rhs in
+                if lhs.annotation.path != rhs.annotation.path {
+                    return lhs.annotation.path < rhs.annotation.path
+                }
+                return lhs.annotation.line < rhs.annotation.line
+            }
+    }
+
+    private func formatAnnotationsGroupedByFile(_ annotations: [DeduplicatedAnnotation]) -> String {
+        // Group by file
+        var byFile: [String: [DeduplicatedAnnotation]] = [:]
+        for item in annotations {
+            byFile[item.annotation.path, default: []].append(item)
+        }
+
+        var body = ""
+        let sortedFiles = byFile.keys.sorted()
+
+        for file in sortedFiles {
+            guard let fileAnnotations = byFile[file] else { continue }
+
+            // File header with link
+            let fileLink = "https://github.com/\(context.owner)/\(context.repo)/blob/\(context.commitSHA)/\(file)"
+            body += "### [`\(file)`](\(fileLink))\n\n"
+
+            // Annotations for this file
+            for item in fileAnnotations {
+                body += formatAnnotationInGroup(item.annotation, count: item.count)
             }
             body += "\n"
         }
 
-        if annotations.isEmpty {
-            body = "No issues found."
+        return body
+    }
+
+    private func formatAnnotationInGroup(_ annotation: Annotation, count: Int) -> String {
+        // Line link
+        let lineLink = "https://github.com/\(context.owner)/\(context.repo)/blob/\(context.commitSHA)/\(annotation.path)#L\(annotation.line)"
+
+        var line = "- **[Line \(annotation.line)](\(lineLink))**"
+        if let title = annotation.title {
+            line += " — \(title)"
+        }
+        if count > 1 {
+            line += " ×\(count)"
+        }
+        line += "\n  > \(annotation.message)\n"
+
+        if annotation.sticky {
+            line += "  <!-- sticky -->\n"
         }
 
-        return body
+        return line
     }
 
     private func formatAnnotation(_ annotation: Annotation) -> String {
@@ -244,11 +322,13 @@ public final class PRCommentReporter: Reporter, Sendable {
             icon = ":information_source:"
         }
 
-        var line = "\(icon) **\(annotation.path):\(annotation.line)**"
+        // Create clickable link to the file on GitHub
+        let fileLink = "https://github.com/\(context.owner)/\(context.repo)/blob/\(context.commitSHA)/\(annotation.path)#L\(annotation.line)"
+        var line = "\(icon) [`\(annotation.path):\(annotation.line)`](\(fileLink))"
         if let title = annotation.title {
-            line += " - \(title)"
+            line += " — \(title)"
         }
-        line += "\n  \(annotation.message)\n"
+        line += "\n> \(annotation.message)\n"
 
         // Apply strikethrough for sticky resolved annotations
         if annotation.sticky {
