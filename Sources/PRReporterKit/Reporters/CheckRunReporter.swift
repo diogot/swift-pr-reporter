@@ -176,6 +176,28 @@ public final class CheckRunReporter: Reporter, Sendable {
         // This is intentionally a no-op.
     }
 
+    /// Complete the check run with a specific conclusion.
+    /// Use this to finalize the check run after posting annotations and summary.
+    /// - Parameter conclusion: The conclusion to set for the check run.
+    public func complete(conclusion: CheckRunConclusion) async throws {
+        // Validate write access
+        try context.validateWriteAccess()
+
+        let checkRun = try await findOrCreateCheckRun()
+        checkRunID = checkRun.id
+
+        let updateRequest = UpdateCheckRunRequest(
+            status: .completed,
+            conclusion: conclusion,
+            completedAt: ISO8601DateFormatter().string(from: Date()),
+            output: CheckRunOutput(
+                title: name,
+                summary: storedSummary ?? "Completed"
+            )
+        )
+        _ = try await checksAPI.updateCheckRun(checkRun.id, updateRequest)
+    }
+
     // MARK: - Private Helpers
 
     private func findOrCreateCheckRun() async throws -> CheckRun {
