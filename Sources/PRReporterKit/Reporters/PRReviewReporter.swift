@@ -143,7 +143,11 @@ public final class PRReviewReporter: Reporter, Sendable {
 
                 if !alreadyExists {
                     // Append to the most recent comment (highest ID)
-                    let mostRecent = existingComments.max(by: { $0.id < $1.id })!
+                    guard let mostRecent = existingComments.max(by: { $0.id < $1.id }) else {
+                        // This should never happen since existingComments is verified non-empty above
+                        print("[WARNING] Unexpected: no most recent comment found for \(key) despite non-empty array")
+                        continue
+                    }
                     let existingContent = CommentMarker.removeMarker(from: mostRecent.body)
                     let combinedBody = existingContent + "\n\n---\n\n" + body
                     let combinedMarkedBody = CommentMarker.addMarker(to: combinedBody, identifier: identifier)
