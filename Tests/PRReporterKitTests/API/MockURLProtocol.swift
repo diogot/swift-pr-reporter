@@ -15,6 +15,9 @@ final class MockURLProtocol: URLProtocol {
     /// Internal storage for request handler.
     nonisolated(unsafe) private static var _requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
+    /// Internal storage for URL-based handlers (prefix -> handler).
+    nonisolated(unsafe) private static var _routedHandlers: [String: (URLRequest) throws -> (HTTPURLResponse, Data)] = [:]
+
     /// Internal storage for recorded requests.
     nonisolated(unsafe) private static var _recordedRequests: [URLRequest] = []
 
@@ -37,11 +40,24 @@ final class MockURLProtocol: URLProtocol {
     }
 
     /// Start mocking - registers the protocol globally.
+    /// Note: This clears all handlers. For tests that only need routed handlers,
+    /// use ensureMockingEnabled() instead.
     static func startMocking() {
         lock.withLock {
             _isMockingEnabled = true
             _requestHandler = nil
+            _routedHandlers = [:]
             _recordedRequests = []
+        }
+        _ = URLProtocol.registerClass(MockURLProtocol.self)
+    }
+
+    /// Ensure mocking is enabled without clearing existing handlers.
+    /// Safe to call from multiple test suites concurrently.
+    static func ensureMockingEnabled() {
+        lock.withLock {
+            guard !_isMockingEnabled else { return }
+            _isMockingEnabled = true
         }
         _ = URLProtocol.registerClass(MockURLProtocol.self)
     }
@@ -52,6 +68,7 @@ final class MockURLProtocol: URLProtocol {
         lock.withLock {
             _isMockingEnabled = false
             _requestHandler = nil
+            _routedHandlers = [:]
             _recordedRequests = []
         }
     }
@@ -61,6 +78,27 @@ final class MockURLProtocol: URLProtocol {
         lock.withLock {
             _requestHandler = nil
             _recordedRequests = []
+        }
+    }
+
+    /// Register a handler for a specific URL path prefix.
+    /// Routed handlers have priority over the default requestHandler.
+    /// - Parameters:
+    ///   - prefix: URL path prefix to match (e.g., "/repos/test/repo")
+    ///   - handler: Handler for matching requests
+    static func registerHandler(
+        forPathPrefix prefix: String,
+        handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
+    ) {
+        lock.withLock {
+            _routedHandlers[prefix] = handler
+        }
+    }
+
+    /// Unregister a handler for a specific URL path prefix.
+    static func unregisterHandler(forPathPrefix prefix: String) {
+        lock.withLock {
+            _routedHandlers.removeValue(forKey: prefix)
         }
     }
 
@@ -77,6 +115,20 @@ final class MockURLProtocol: URLProtocol {
         let resolvedRequest = Self.resolveRequestBody(request)
         Self.appendRequest(resolvedRequest)
 
+        // First, try to find a routed handler based on URL path
+        if let handler = Self.findRoutedHandler(for: resolvedRequest) {
+            do {
+                let (response, data) = try handler(resolvedRequest)
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            } catch {
+                client?.urlProtocol(self, didFailWithError: error)
+            }
+            return
+        }
+
+        // Fall back to the default handler
         guard let handler = Self.getHandler() else {
             client?.urlProtocol(self, didFailWithError: NSError(domain: "MockURLProtocol", code: 1, userInfo: [NSLocalizedDescriptionKey: "requestHandler not set"]))
             return
@@ -89,6 +141,30 @@ final class MockURLProtocol: URLProtocol {
             client?.urlProtocolDidFinishLoading(self)
         } catch {
             client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    /// Find a routed handler for the given request.
+    private static func findRoutedHandler(
+        for request: URLRequest
+    ) -> ((URLRequest) throws -> (HTTPURLResponse, Data))? {
+        guard let url = request.url else {
+            return nil
+        }
+
+        let path = url.path
+
+        return lock.withLock {
+            // Find the longest matching prefix
+            var bestMatch: (prefix: String, handler: (URLRequest) throws -> (HTTPURLResponse, Data))?
+            for (prefix, handler) in _routedHandlers {
+                if path.hasPrefix(prefix) {
+                    if bestMatch == nil || prefix.count > bestMatch!.prefix.count {
+                        bestMatch = (prefix, handler)
+                    }
+                }
+            }
+            return bestMatch?.handler
         }
     }
 

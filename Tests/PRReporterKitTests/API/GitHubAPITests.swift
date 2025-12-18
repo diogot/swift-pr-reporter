@@ -12,8 +12,8 @@ import Foundation
 @Suite("GitHubAPI Tests", .serialized)
 struct GitHubAPITests {
     init() {
-        // Start mocking at suite initialization
-        MockURLProtocol.startMocking()
+        // Enable mocking without clearing handlers (other test suites may have registered handlers)
+        MockURLProtocol.ensureMockingEnabled()
     }
 
     @Test("GET request includes authorization header")
@@ -30,7 +30,8 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test")
 
-        let request = try #require(MockURLProtocol.recordedRequests.first)
+        // Filter for requests to /test path (ignore requests from other concurrent tests)
+        let request = try #require(MockURLProtocol.recordedRequests.first { $0.url?.path == "/test" })
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token-123")
     }
 
@@ -44,7 +45,8 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test")
 
-        let request = try #require(MockURLProtocol.recordedRequests.first)
+        // Filter for requests to /test path (ignore requests from other concurrent tests)
+        let request = try #require(MockURLProtocol.recordedRequests.first { $0.url?.path == "/test" })
         #expect(request.value(forHTTPHeaderField: "Accept") == "application/vnd.github+json")
         #expect(request.value(forHTTPHeaderField: "X-GitHub-Api-Version") == "2022-11-28")
     }
@@ -59,7 +61,8 @@ struct GitHubAPITests {
 
         let _: [String: String] = try await api.get("/test", query: ["page": "2", "per_page": "100"])
 
-        let request = try #require(MockURLProtocol.recordedRequests.first)
+        // Filter for requests to /test path (ignore requests from other concurrent tests)
+        let request = try #require(MockURLProtocol.recordedRequests.first { $0.url?.path == "/test" })
         let url = try #require(request.url).absoluteString
         #expect(url.contains("page=2"))
         #expect(url.contains("per_page=100"))
@@ -81,7 +84,8 @@ struct GitHubAPITests {
         let body = TestBody(name: "test", value: 42)
         let _: [String: Int] = try await api.post("/test", body: body)
 
-        let request = try #require(MockURLProtocol.recordedRequests.first)
+        // Filter for requests to /test path (ignore requests from other concurrent tests)
+        let request = try #require(MockURLProtocol.recordedRequests.first { $0.url?.path == "/test" })
         #expect(request.httpMethod == "POST")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
 
@@ -105,7 +109,8 @@ struct GitHubAPITests {
 
         let _: [String: Bool] = try await api.patch("/test/1", body: UpdateBody(status: "completed"))
 
-        let request = try #require(MockURLProtocol.recordedRequests.first)
+        // Filter for requests to /test/1 path (ignore requests from other concurrent tests)
+        let request = try #require(MockURLProtocol.recordedRequests.first { $0.url?.path == "/test/1" })
         #expect(request.httpMethod == "PATCH")
     }
 
@@ -127,7 +132,8 @@ struct GitHubAPITests {
 
         try await api.delete("/test/1")
 
-        let request = try #require(MockURLProtocol.recordedRequests.first)
+        // Filter for requests to /test/1 path (ignore requests from other concurrent tests)
+        let request = try #require(MockURLProtocol.recordedRequests.first { $0.url?.path == "/test/1" })
         #expect(request.httpMethod == "DELETE")
     }
 

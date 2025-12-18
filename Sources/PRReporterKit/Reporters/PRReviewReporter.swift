@@ -32,16 +32,18 @@ public final class PRReviewReporter: Reporter, Sendable {
     ///   - context: GitHub context with authentication and repository info.
     ///   - identifier: Used to identify and track comments.
     ///   - outOfRangeStrategy: How to handle annotations outside the diff.
+    ///   - urlSession: URL session to use for API requests (default: shared).
     public init(
         context: GitHubContext,
         identifier: String,
-        outOfRangeStrategy: OutOfRangeStrategy = .fallbackToComment
+        outOfRangeStrategy: OutOfRangeStrategy = .fallbackToComment,
+        urlSession: URLSession = .shared
     ) {
         self.context = context
         self.identifier = identifier
         self.outOfRangeStrategy = outOfRangeStrategy
 
-        self.api = GitHubAPI(token: context.token)
+        self.api = GitHubAPI(token: context.token, urlSession: urlSession)
         self.pullRequestsAPI = PullRequestsAPI(api: api, owner: context.owner, repo: context.repo)
 
         // Initialize fallback reporters based on strategy
@@ -78,7 +80,10 @@ public final class PRReviewReporter: Reporter, Sendable {
 
         // Fetch files to get diff information
         let files = try await pullRequestsAPI.listFiles(prNumber: prNumber)
-        let filesDict = Dictionary(uniqueKeysWithValues: files.map { ($0.filename, $0) })
+        // Use reduce to handle potential duplicate filenames (last wins)
+        let filesDict = files.reduce(into: [String: PullRequestFile]()) { dict, file in
+            dict[file.filename] = file
+        }
 
         // Categorize annotations
         var inRangeAnnotations: [(Annotation, PullRequestFile, Int)] = [] // (annotation, file, position)
@@ -109,13 +114,12 @@ public final class PRReviewReporter: Reporter, Sendable {
             prNumber: prNumber,
             withIdentifier: identifier
         )
-        let existingByKey = Dictionary(
-            uniqueKeysWithValues: existingComments.compactMap { comment -> (String, ReviewComment)? in
-                guard let line = comment.line else { return nil }
-                let key = "\(comment.path):\(line)"
-                return (key, comment)
-            }
-        )
+        // Group existing comments by path:line key, preserving all duplicates
+        let existingByKey: [String: [ReviewComment]] = existingComments.reduce(into: [:]) { dict, comment in
+            guard let line = comment.line else { return }
+            let key = "\(comment.path):\(line)"
+            dict[key, default: []].append(comment)
+        }
 
         // Post in-range annotations
         for (annotation, file, position) in inRangeAnnotations {
@@ -123,15 +127,33 @@ public final class PRReviewReporter: Reporter, Sendable {
             let body = formatAnnotationBody(annotation)
             let markedBody = CommentMarker.addMarker(to: body, identifier: identifier)
 
-            if let existing = existingByKey[key] {
-                // Update existing comment
-                let existingHash = CommentMarker.parse(from: existing.body)?.contentHash
-                let newHash = CommentMarker.hash(content: body)
+            if let existingComments = existingByKey[key], !existingComments.isEmpty {
+                // Check if any existing comment already contains this content
+                // (either as full body or as a section in a merged comment)
+                let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                let newHash = CommentMarker.hash(content: trimmedBody)
+                let alreadyExists = existingComments.contains { comment in
+                    let existingContent = CommentMarker.removeMarker(from: comment.body)
+                    let sections = existingContent.components(separatedBy: "\n\n---\n\n")
+                    return sections.contains { section in
+                        let trimmedSection = section.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return CommentMarker.hash(content: trimmedSection) == newHash
+                    }
+                }
 
-                if existingHash != newHash {
+                if !alreadyExists {
+                    // Append to the most recent comment (highest ID)
+                    guard let mostRecent = existingComments.max(by: { $0.id < $1.id }) else {
+                        // This should never happen since existingComments is verified non-empty above
+                        print("[WARNING] Unexpected: no most recent comment found for \(key) despite non-empty array")
+                        continue
+                    }
+                    let existingContent = CommentMarker.removeMarker(from: mostRecent.body)
+                    let combinedBody = existingContent + "\n\n---\n\n" + body
+                    let combinedMarkedBody = CommentMarker.addMarker(to: combinedBody, identifier: identifier)
                     _ = try await pullRequestsAPI.updateReviewComment(
-                        commentID: existing.id,
-                        body: markedBody
+                        commentID: mostRecent.id,
+                        body: combinedMarkedBody
                     )
                     updated += 1
                 }
