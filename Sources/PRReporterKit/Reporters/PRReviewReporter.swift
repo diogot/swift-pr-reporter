@@ -130,12 +130,14 @@ public final class PRReviewReporter: Reporter, Sendable {
             if let existingComments = existingByKey[key], !existingComments.isEmpty {
                 // Check if any existing comment already contains this content
                 // (either as full body or as a section in a merged comment)
-                let newHash = CommentMarker.hash(content: body)
+                let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                let newHash = CommentMarker.hash(content: trimmedBody)
                 let alreadyExists = existingComments.contains { comment in
                     let existingContent = CommentMarker.removeMarker(from: comment.body)
                     let sections = existingContent.components(separatedBy: "\n\n---\n\n")
                     return sections.contains { section in
-                        CommentMarker.hash(content: section) == newHash
+                        let trimmedSection = section.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return CommentMarker.hash(content: trimmedSection) == newHash
                     }
                 }
 

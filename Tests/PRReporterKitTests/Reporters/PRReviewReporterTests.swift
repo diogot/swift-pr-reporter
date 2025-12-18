@@ -493,6 +493,7 @@ struct PRReviewReporterTests {
 
         #expect(updateCommentCalled, "Should have called update comment API")
         #expect(updatedCommentId == 500, "Should update the most recent comment (highest ID)")
+        #expect(result.annotationsPosted == 0)
         #expect(result.annotationsUpdated == 1)
     }
 

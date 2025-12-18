@@ -148,9 +148,11 @@ final class MockURLProtocol: URLProtocol {
     private static func findRoutedHandler(
         for request: URLRequest
     ) -> ((URLRequest) throws -> (HTTPURLResponse, Data))? {
-        guard let url = request.url, let path = url.path.isEmpty ? nil : url.path else {
+        guard let url = request.url else {
             return nil
         }
+
+        let path = url.path
 
         return lock.withLock {
             // Find the longest matching prefix
