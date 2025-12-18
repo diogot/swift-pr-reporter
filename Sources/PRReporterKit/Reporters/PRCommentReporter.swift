@@ -52,7 +52,6 @@ public final class PRCommentReporter: Reporter, Sendable {
         let body = generateCommentBody(annotations: annotations)
         let markedBody = CommentMarker.addMarker(to: body, identifier: identifier)
 
-        var posted = 0
         var updated = 0
         var deleted = 0
         var commentURL: URL?
@@ -82,7 +81,6 @@ public final class PRCommentReporter: Reporter, Sendable {
                 let newComment = try await issuesAPI.createComment(issueNumber: prNumber, body: markedBody)
                 commentID = newComment.id
                 commentURL = newComment.url
-                posted = 1
             }
 
         case .append:
@@ -90,7 +88,6 @@ public final class PRCommentReporter: Reporter, Sendable {
             let newComment = try await issuesAPI.createComment(issueNumber: prNumber, body: markedBody)
             commentID = newComment.id
             commentURL = newComment.url
-            posted = 1
 
         case .replace:
             // Delete existing comments, then create new
@@ -104,7 +101,6 @@ public final class PRCommentReporter: Reporter, Sendable {
             let newComment = try await issuesAPI.createComment(issueNumber: prNumber, body: markedBody)
             commentID = newComment.id
             commentURL = newComment.url
-            posted = 1
         }
 
         return ReportResult(
