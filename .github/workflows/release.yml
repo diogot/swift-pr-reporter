@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-macos:
     name: Test on macOS
@@ -12,6 +16,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
 
       - name: Check Swift version
         run: swift --version
@@ -34,6 +48,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
       - name: Check Swift version
         run: swift --version
 
@@ -55,15 +77,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
-        id: release_notes
         run: |
-          cat > release_notes.md << 'EOF'
+          # Get previous tag for changelog
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | sed -n '2p')
+
+          # Generate changelog
+          echo "## What's Changed" > release_notes.md
+          echo "" >> release_notes.md
+          if [ -z "$PREV_TAG" ]; then
+            git log --pretty=format:"- %s" HEAD >> release_notes.md
+          else
+            git log --pretty=format:"- %s" ${PREV_TAG}..HEAD >> release_notes.md
+          fi
+          echo "" >> release_notes.md
+          echo "" >> release_notes.md
+
+          # Append static content
+          cat >> release_notes.md << 'EOF'
           ## Installation
 
           ### Swift Package Manager
@@ -93,47 +131,6 @@ jobs:
           2. Enter the repository URL: `https://github.com/${{ github.repository }}.git`
           3. Select the version: `${{ steps.get_version.outputs.VERSION }}`
           4. Add `PRReporterKit` to your target
-
-          ## Usage
-
-          ```swift
-          import PRReporterKit
-
-          // Auto-detect context from GitHub Actions environment
-          let context = try GitHubContext.fromEnvironment()
-
-          // Create a check run reporter
-          let reporter = CheckRunReporter(
-              context: context,
-              name: "Xcode Build",
-              identifier: "xcode-build"
-          )
-
-          // Report annotations
-          let result = try await reporter.report([
-              Annotation(
-                  path: "Sources/MyApp/File.swift",
-                  line: 42,
-                  level: .warning,
-                  message: "Variable 'foo' was never used"
-              )
-          ])
-          ```
-
-          ## Requirements
-
-          - Swift 6.2+
-          - macOS 13+ or Linux (Ubuntu 22.04+)
-
-          ## Permissions Required
-
-          For GitHub Actions workflows using this library:
-
-          ```yaml
-          permissions:
-            checks: write        # For CheckRunReporter
-            pull-requests: write # For PRReviewReporter, PRCommentReporter
-          ```
 
           For more information, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
           EOF
