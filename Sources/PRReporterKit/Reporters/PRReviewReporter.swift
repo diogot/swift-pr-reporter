@@ -106,6 +106,16 @@ public final class PRReviewReporter: Reporter, Sendable {
             }
         }
 
+        // Deduplicate annotations with identical path, line, and message
+        var seenAnnotationKeys = Set<String>()
+        var deduplicatedInRange: [(Annotation, PullRequestFile, Int)] = []
+        for item in inRangeAnnotations {
+            let dedupKey = "\(item.1.filename):\(item.0.line):\(item.0.message)"
+            if seenAnnotationKeys.insert(dedupKey).inserted {
+                deduplicatedInRange.append(item)
+            }
+        }
+
         var posted = 0
         var updated = 0
 
@@ -121,8 +131,8 @@ public final class PRReviewReporter: Reporter, Sendable {
             dict[key, default: []].append(comment)
         }
 
-        // Post in-range annotations
-        for (annotation, file, position) in inRangeAnnotations {
+        // Post in-range annotations (deduplicated)
+        for (annotation, file, position) in deduplicatedInRange {
             let key = "\(file.filename):\(annotation.line)"
             let body = formatAnnotationBody(annotation)
             let markedBody = CommentMarker.addMarker(to: body, identifier: identifier)

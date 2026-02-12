@@ -72,6 +72,24 @@ struct CommentMarkerTests {
         #expect(hash1 != hash2)
     }
 
+    @Test("Hash is deterministic across calls (FNV-1a)")
+    func hashDeterministic() {
+        // Verify that hashing the same content always produces the same result.
+        // This is critical for cross-run change detection via HTML comment markers.
+        let content = "## Build Results\n- 1 warning\n- 0 errors"
+        let expectedHash = CommentMarker.hash(content: content)
+
+        // Multiple calls must return the exact same value
+        for _ in 0..<100 {
+            #expect(CommentMarker.hash(content: content) == expectedHash)
+        }
+
+        // A marker generated with this hash must be parseable back to the same hash
+        let marker = CommentMarker.generate(identifier: "test", contentHash: expectedHash)
+        let parsed = CommentMarker.parse(from: marker)
+        #expect(parsed?.contentHash == expectedHash)
+    }
+
     @Test("Add marker to body")
     func addMarker() {
         let body = "## Build Results\n\n- 1 error"

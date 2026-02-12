@@ -497,6 +497,87 @@ struct PRReviewReporterTests {
         #expect(result.annotationsUpdated == 1)
     }
 
+    // MARK: - Test: Duplicate input annotations produce only one comment
+
+    @Test("Deduplicates identical annotations in the same report call")
+    func deduplicatesSameAnnotations() async throws {
+        MockURLProtocol.ensureMockingEnabled()
+
+        var createCallCount = 0
+
+        MockURLProtocol.registerHandler(forPathPrefix: routePrefix) { request in
+            let url = request.url!.absoluteString
+
+            // List files endpoint
+            if url.contains("/pulls/1/files") {
+                let files: [[String: Any]] = [[
+                    "sha": "abc123",
+                    "filename": "Sources/App.swift",
+                    "status": "modified",
+                    "additions": 10,
+                    "deletions": 2,
+                    "changes": 12,
+                    "patch": "@@ -1,5 +1,10 @@\n context\n+added line\n context"
+                ]]
+                return try Self.jsonResponse(json: files, for: request)
+            }
+
+            // List review comments endpoint (no existing comments)
+            if url.contains("/pulls/1/comments") && request.httpMethod == "GET" {
+                return try Self.jsonResponse(json: [] as [[String: Any]], for: request)
+            }
+
+            // Create review comment endpoint
+            if url.contains("/pulls/1/comments") && request.httpMethod == "POST" {
+                createCallCount += 1
+                let response: [String: Any] = [
+                    "id": 700 + createCallCount,
+                    "body": "test",
+                    "path": "Sources/App.swift",
+                    "position": 2,
+                    "line": 2,
+                    "side": "RIGHT",
+                    "commit_id": "sha123",
+                    "html_url": "https://github.com/test/repo/pull/1#comment-\(700 + createCallCount)"
+                ]
+                return try Self.jsonResponse(json: response, for: request, statusCode: 201)
+            }
+
+            // Return 404 for unexpected requests
+            return try Self.notFoundResponse(for: request)
+        }
+
+        defer { MockURLProtocol.unregisterHandler(forPathPrefix: routePrefix) }
+
+        let context = GitHubContext(
+            token: "test-token",
+            repository: "test/repo",
+            pullRequest: 1,
+            commitSHA: "sha123"
+        )
+
+        let reporter = PRReviewReporter(
+            context: context,
+            identifier: identifier,
+            outOfRangeStrategy: .dismiss,
+            urlSession: MockURLProtocol.createMockSession()
+        )
+
+        // Two identical annotations for the same file:line:message
+        let annotation = Annotation(
+            path: "Sources/App.swift",
+            line: 2,
+            level: .warning,
+            message: "Todo Violation"
+        )
+
+        let result = try await reporter.report([annotation, annotation])
+
+        #expect(createCallCount == 1, "Should only create ONE comment, not two")
+        #expect(result.annotationsPosted == 1)
+        #expect(result.annotationsUpdated == 0)
+    }
+
     // MARK: - Test: Duplicate filenames in PR files don't crash
 
     @Test("Handles duplicate filenames in PR files without crashing")

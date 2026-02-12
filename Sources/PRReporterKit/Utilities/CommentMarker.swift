@@ -65,12 +65,14 @@ public enum CommentMarker {
     /// - Parameter content: The content to hash.
     /// - Returns: A short hash string.
     public static func hash(content: String) -> String {
-        // Simple hash using the built-in hasher
-        var hasher = Hasher()
-        hasher.combine(content)
-        let hashValue = hasher.finalize()
-        // Return first 8 hex characters
-        return String(format: "%08x", abs(hashValue))
+        // FNV-1a hash - deterministic across program runs
+        // (Swift's Hasher is randomly seeded per process and must not be used for persistence)
+        var hash: UInt64 = 14695981039346656037 // FNV offset basis
+        for byte in content.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1099511628211 // FNV prime
+        }
+        return String(format: "%08x", UInt32(truncatingIfNeeded: hash))
     }
 
     /// Add a marker to the beginning of a comment body.
